@@ -15,4 +15,7 @@ vsc-extension-quickstart.md
 **/*.ts
 !types/**/*.d.ts
 !snippets/**
+!syntaxes/**
+!icons/**
+!language-configuration.json
 **/.vscode-test.*

@@ -15,5 +15,10 @@ function main(workbook: ExcelScript.Workbook) {
     // Set a range value
     sheet.getRange("A1").setValue("Updated by Office Script");
     
+    let cell = sheet.getCell(1,1)
+
+    sheet.setTabColor("#FFA500")
+    
+    let sheet2 = workbook.getWorksheet('Sheet2')
     console.log("Script executed successfully on worksheet: " + sheet.getName());
 }

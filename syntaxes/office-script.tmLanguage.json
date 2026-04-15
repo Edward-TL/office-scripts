@@ -1,0 +1,11 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Office Script",
+    "scopeName": "source.office-script",
+    "fileTypes": ["osts"],
+    "patterns": [
+        {
+            "include": "source.ts"
+        }
+    ]
+}
