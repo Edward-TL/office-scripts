@@ -1,0 +1,69 @@
+{
+  "name": "office-scripts",
+  "displayName": "Office Scripts Support",
+  "description": "Professional language support for Office Scripts (.osts files)",
+  "version": "1.0.0",
+  "publisher": "expert-dev",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "typescript",
+        "extensions": [
+          ".osts"
+        ],
+        "aliases": [
+          "Office Script"
+        ]
+      }
+    ],
+    "typescriptServerPlugins": [
+      {
+        "name": "office-scripts-plugin",
+        "enableForWorkspaceTypeScriptVersions": true,
+        "languages": [
+          "typescript"
+        ]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "typescript",
+        "path": "./snippets/office-scripts.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "office-scripts-plugin": "file:./plugin-package",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "chai": "^6.2.2",
+    "esbuild": "^0.17.0",
+    "eslint": "^8.0.0",
+    "mocha": "^11.7.5",
+    "typescript": "^5.0.0"
+  }
+}

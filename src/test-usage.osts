@@ -1,0 +1,37 @@
+/**
+ * Validation fixture for ExcelScript type resolution.
+ *
+ * Expected behavior when opened in the Extension Development Host:
+ *   - The "positive" block below produces ZERO diagnostics.
+ *   - The "negative (type errors)" block produces exactly one TS2339 (handled by @ts-expect-error).
+ *   - The "negative (custom lint)" block produces diagnostics from src/diagnostics.ts.
+ */
+function main(workbook: ExcelScript.Workbook) {
+    // ---------- Positive cases: must resolve cleanly ----------
+    const sheet: ExcelScript.Worksheet = workbook.getActiveWorksheet();
+    const sheets: ExcelScript.Worksheet[] = workbook.getWorksheets();
+    const table: ExcelScript.Table | undefined = workbook.getTable("Sales");
+    const range: ExcelScript.Range = sheet.getRange("A1:B2");
+
+    range.setValue("hello");
+    range.setValues([[1, 2], [3, 4]]);
+
+    if (table) {
+        const columns: ExcelScript.TableColumn[] = table.getColumns();
+        table.addRow(undefined, ["a", "b"]);
+        void columns;
+    }
+
+    void sheets;
+
+    // ---------- Negative (type errors): proves the types are loaded ----------
+    // Without the .d.ts, tsserver would infer `workbook` as any and NOT flag this.
+    // @ts-expect-error -- nonExistentMethod is not part of ExcelScript.Workbook
+    workbook.nonExistentMethod();
+
+    // ---------- Negative (custom lint rules from diagnostics.ts) ----------
+    const x: any = 1;          // "any" is forbidden
+    console.warn("not ok");    // console.warn is unsupported
+    console.error("nope");     // console.error is unsupported
+    void x;
+}

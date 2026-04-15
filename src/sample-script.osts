@@ -1,0 +1,19 @@
+/**
+ * This is a sample Office Script.
+ */
+function main(workbook: ExcelScript.Workbook) {
+    // Access the active worksheet
+    let sheet = workbook.getActiveWorksheet();
+    
+    // Get a table by name
+    let table = workbook.getTable("MyTable");
+    if (table) {
+        // Add a row to the table
+        table.addRow(undefined, ["Value 1", "Value 2"]);
+    }
+    
+    // Set a range value
+    sheet.getRange("A1").setValue("Updated by Office Script");
+    
+    console.log("Script executed successfully on worksheet: " + sheet.getName());
+}

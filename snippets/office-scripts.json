@@ -1,0 +1,67 @@
+{
+    "Office Script main function": {
+        "prefix": "osmain",
+        "body": [
+            "function main(workbook: ExcelScript.Workbook) {",
+            "\tconst sheet = workbook.getActiveWorksheet();",
+            "\t$0",
+            "}"
+        ],
+        "description": "Entry point for an Office Script."
+    },
+    "Get active worksheet": {
+        "prefix": "ossheet",
+        "body": [
+            "const ${1:sheet} = workbook.getActiveWorksheet();",
+            "$0"
+        ],
+        "description": "Get the active worksheet."
+    },
+    "Get table with null check": {
+        "prefix": "ostable",
+        "body": [
+            "const ${1:table} = workbook.getTable(\"${2:TableName}\");",
+            "if (!${1:table}) {",
+            "\treturn;",
+            "}",
+            "$0"
+        ],
+        "description": "Get a table by name with a safe null guard."
+    },
+    "Iterate table rows": {
+        "prefix": "osforrows",
+        "body": [
+            "const ${1:rows} = ${2:table}.getRange().getValues();",
+            "for (const ${3:row} of ${1:rows}) {",
+            "\t$0",
+            "}"
+        ],
+        "description": "Iterate over the rows of a table as values."
+    },
+    "Set range value with formatting": {
+        "prefix": "osrange",
+        "body": [
+            "const ${1:range} = ${2:sheet}.getRange(\"${3:A1}\");",
+            "${1:range}.setValue(${4:\"value\"});",
+            "${1:range}.getFormat().getFont().setBold(${5:true});",
+            "$0"
+        ],
+        "description": "Set a range value and apply basic formatting."
+    },
+    "Add a row to a table": {
+        "prefix": "osaddrow",
+        "body": [
+            "${1:table}.addRow(undefined, [${2:\"value1\"}, ${3:\"value2\"}]);",
+            "$0"
+        ],
+        "description": "Append a row to an existing table."
+    },
+    "Get range by indexes": {
+        "prefix": "osrangeidx",
+        "body": [
+            "const ${1:range} = ${2:sheet}.getRangeByIndexes(${3:0}, ${4:0}, ${5:1}, ${6:1});",
+            "$0"
+        ],
+        "description": "Get a range by row/column indexes (0-based)."
+    }
+}
