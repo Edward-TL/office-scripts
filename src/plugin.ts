@@ -10,6 +10,13 @@ import * as path from 'path';
  * globals (notably `main` and the `ExcelScript` namespace), which would
  * pollute every unrelated TypeScript project if injected unconditionally.
  *
+ * Injection strategy: we proxy `getScriptFileNames` on the language service
+ * host to append our ambient .d.ts to the file list. This is the documented
+ * TS plugin pattern and works for both configured projects and the inferred
+ * project that tsserver creates for standalone .osts files. (The previous
+ * approach of calling `project.addRoot(scriptInfo)` hits an internal
+ * `Debug Failure. False expression.` assertion when the project is inferred.)
+ *
  * Layout at runtime:
  *   <ext-root>/dist/plugin.js         (this file, after esbuild)
  *   <ext-root>/types/excel-script.d.ts (ambient declarations we inject)
@@ -19,61 +26,46 @@ function init({ typescript }: { typescript: typeof ts }) {
         const log = (msg: string) =>
             info.project.projectService.logger.info(`[office-scripts] ${msg}`);
 
-        const declarationPath = path.resolve(__dirname, '..', 'types', 'excel-script.d.ts');
-        const normalizedPath = typescript.server.toNormalizedPath(declarationPath);
+        try {
+            log(`Plugin initialized for project: ${info.project.getProjectName()}`);
+            log(`Project root: ${info.project.getCurrentDirectory()}`);
+            log(`__dirname: ${__dirname}`);
 
-        let injected = false;
+            const declarationPath = path.resolve(__dirname, '..', 'types', 'excel-script.d.ts');
+            log(`Resolved declaration path: ${declarationPath}`);
 
-        const tryInject = () => {
-            if (injected) return;
-            if (!projectHasOsts(info.project)) return;
-
-            const scriptInfo = info.project.projectService.getOrCreateScriptInfoForNormalizedPath(
-                normalizedPath,
-                /* openedByClient */ false,
-                /* fileContent */ undefined,
-                typescript.ScriptKind.TS,
-                /* hasMixedContent */ false
-            );
-
-            if (!scriptInfo) {
-                log(`Failed to load ExcelScript types from ${declarationPath}`);
-                return;
-            }
-
-            if (!info.project.containsScriptInfo(scriptInfo)) {
-                info.project.addRoot(scriptInfo);
-                info.project.updateGraph();
-                log(`Loaded ExcelScript types for project ${info.project.getProjectName()}`);
-            }
-            injected = true;
-        };
-
-        // Try immediately — covers the common case where the user opened an
-        // .osts file first.
-        tryInject();
-
-        // Proxy the language service so that late-opened .osts files still
-        // trigger injection on the next query.
-        const proxy: ts.LanguageService = Object.create(null);
-        for (const k of Object.keys(info.languageService) as (keyof ts.LanguageService)[]) {
-            const original = info.languageService[k];
-            (proxy as any)[k] = (...args: unknown[]) => {
-                tryInject();
-                return (original as Function).apply(info.languageService, args);
+            // Proxy getScriptFileNames on the language service host so our
+            // ambient declaration is always presented to the compiler whenever
+            // the current project contains at least one .osts file. tsserver
+            // re-queries this on every refresh, so late-opened .osts files are
+            // picked up automatically without any explicit re-injection hook.
+            const host = info.languageServiceHost;
+            const originalGetScriptFileNames = host.getScriptFileNames.bind(host);
+            host.getScriptFileNames = () => {
+                const files = originalGetScriptFileNames();
+                try {
+                    if (files.some(f => f.toLowerCase().endsWith('.osts'))) {
+                        if (!files.includes(declarationPath)) {
+                            return [...files, declarationPath];
+                        }
+                    }
+                } catch (err) {
+                    log(`Error in getScriptFileNames proxy: ${err}`);
+                }
+                return files;
             };
-        }
 
-        return proxy;
+            log(`Plugin create() installed getScriptFileNames proxy`);
+            // Return the untouched language service — no method-level proxying
+            // needed since the host-level injection handles everything.
+            return info.languageService;
+        } catch (err) {
+            log(`FATAL: Error in plugin create(): ${err}`);
+            throw err;
+        }
     }
 
     return { create };
-}
-
-function projectHasOsts(project: ts.server.Project): boolean {
-    // Fast path: any already-known file with the .osts extension.
-    const files = project.getFileNames(/* excludeFilesFromExternalLibraries */ true);
-    return files.some(f => f.toLowerCase().endsWith('.osts'));
 }
 
 export = init;

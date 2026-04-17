@@ -6,6 +6,7 @@
  *   - The "negative (type errors)" block produces exactly one TS2339 (handled by @ts-expect-error).
  *   - The "negative (custom lint)" block produces diagnostics from src/diagnostics.ts.
  */
+
 function main(workbook: ExcelScript.Workbook) {
     // ---------- Positive cases: must resolve cleanly ----------
     const sheet: ExcelScript.Worksheet = workbook.getActiveWorksheet();

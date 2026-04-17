@@ -1,9 +1,12 @@
 .vscode/**
 .vscode-test/**
+.claude/**
 out/**
 node_modules/**
 !node_modules/office-scripts-plugin/**
 src/**
+plugin-package/**
+*.tgz
 .gitignore
 .yarnrc
 esbuild.js

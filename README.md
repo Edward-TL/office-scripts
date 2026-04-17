@@ -28,7 +28,7 @@ git clone <this-repo>
 cd office-scripts
 npm install
 npm run package
-vsce package --allow-missing-repository
+vsce package
 code --install-extension office-scripts-1.1.1.vsix
 ```
 
@@ -116,8 +116,9 @@ office-scripts/
 
 ```bash
 npm install            # Installs deps and wires up the plugin shim
-npm run watch          # esbuild watch mode for src/ → dist/
-npm run check-types    # tsc --noEmit
+npm run watch:esbuild  # Bundles src/ → dist/ on change
+npm run watch:tsc      # Live type-checks the whole project (tsc --watch)
+npm run check-types    # One-shot tsc --noEmit
 npm run lint           # eslint src
 ```
 

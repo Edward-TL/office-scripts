@@ -3,16 +3,28 @@
   "displayName": "Office Scripts Support",
   "description": "Professional language support for Office Scripts (.osts files)",
   "version": "1.1.1",
-  "publisher": "expert-dev",
+  "publisher": "edward-tl",
+  "author": "edward-tl",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Edward-TL/office-scripts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Edward-TL/office-scripts/issues"
+  },
+  "homepage": "https://github.com/Edward-TL/office-scripts#readme",
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
     "Programming Languages",
+    "Office Script",
     "Linters"
   ],
   "activationEvents": [
-    "onLanguage:office-script"
+    "onLanguage:office-script",
+    "workspaceContains:**/*.osts",
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -54,18 +66,37 @@
         "language": "office-script",
         "path": "./snippets/office-scripts.json"
       }
+    ],
+    "commands": [
+      {
+        "command": "office-scripts.showDiagnostics",
+        "title": "Office Scripts: Show Diagnostic Info",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "office-scripts.restartTsServer",
+        "title": "Office Scripts: Restart TS Server",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "office-scripts.openTsServerLog",
+        "title": "Office Scripts: Open TS Server Log",
+        "category": "Office Scripts"
+      }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "node esbuild.js",
-    "watch": "node esbuild.js --watch",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch",
     "package": "node esbuild.js --production",
+    "pack-plugin": "cd plugin-package && npm pack --pack-destination .. && cd .. && npm install",
     "check-types": "tsc --noEmit",
     "lint": "eslint src"
   },
   "dependencies": {
-    "office-scripts-plugin": "file:./plugin-package",
+    "office-scripts-plugin": "file:./office-scripts-plugin-1.1.1.tgz",
     "typescript": "^5.0.0"
   },
   "devDependencies": {

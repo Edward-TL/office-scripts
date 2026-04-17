@@ -2,6 +2,5 @@
   "name": "office-scripts-plugin",
   "version": "1.1.1",
   "description": "TypeScript Server Plugin shim that loads the bundled plugin from the extension's dist/ output.",
-  "main": "index.js",
-  "private": true
+  "main": "index.js"
 }
