@@ -1,4 +1,11 @@
 {
+    "FlowSplit marker": {
+        "prefix": "osflowsplit",
+        "body": [
+            "/** @FlowSplit */"
+        ],
+        "description": "Mark the next function to be split into its own .osts file."
+    },
     "Office Script main function": {
         "prefix": "osmain",
         "body": [

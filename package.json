@@ -3,7 +3,11 @@
   "displayName": "Office Scripts Support",
   "description": "Professional language support for Office Scripts (.osts files)",
   "version": "1.1.1",
-  "publisher": "expert-dev",
+  "publisher": "edward-tl",
+  "author": {
+    "name": "Edward TL"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -54,7 +58,85 @@
         "language": "office-script",
         "path": "./snippets/office-scripts.json"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "officeScripts.restartTsServer",
+        "title": "Restart TS Server",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.reloadProjects",
+        "title": "Reload Projects",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.selectTypeScriptVersion",
+        "title": "Select TypeScript Version",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.openTsServerLog",
+        "title": "Open TS Server Log",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.goToProjectConfig",
+        "title": "Go to Project Configuration",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.goToSourceDefinition",
+        "title": "Go to Source Definition",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.inlineImports",
+        "title": "Inline Imports for Excel Upload",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.splitFlows",
+        "title": "Split Flows (@FlowSplit)",
+        "category": "Office Scripts"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "officeScripts.restartTsServer",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.reloadProjects",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.selectTypeScriptVersion",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.openTsServerLog",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.goToProjectConfig",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.goToSourceDefinition",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.inlineImports",
+          "when": "editorLangId == office-script"
+        },
+        {
+          "command": "officeScripts.splitFlows",
+          "when": "editorLangId == office-script"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

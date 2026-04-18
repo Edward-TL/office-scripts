@@ -3,6 +3,8 @@ import { subscribeToDocumentChanges } from './diagnostics';
 import { OfficeScriptCodeActionProvider } from './codeActions';
 import { OfficeScriptCompletionProvider } from './completionProvider';
 import { OfficeScriptHoverProvider } from './hoverProvider';
+import { inlineImports } from './inlineImports';
+import { splitFlows } from './flowSplit';
 
 /**
  * Activates the Office Scripts extension.
@@ -57,6 +59,43 @@ export async function activate(context: vscode.ExtensionContext) {
             selector,
             new OfficeScriptHoverProvider()
         )
+    );
+
+    // Proxy built-in TypeScript commands so they surface in the Command
+    // Palette for .osts files. The built-in commands are contributed with
+    // `when: editorLangId == typescript|javascript|...`, which excludes our
+    // `office-script` language id. We expose equivalents under an
+    // "Office Scripts" category, gated on `editorLangId == office-script`.
+    const proxy = (from: string, to: string) =>
+        vscode.commands.registerCommand(from, (...args: unknown[]) =>
+            vscode.commands.executeCommand(to, ...args)
+        );
+    context.subscriptions.push(
+        proxy('officeScripts.restartTsServer', 'typescript.restartTsServer'),
+        proxy('officeScripts.reloadProjects', 'typescript.reloadProjects'),
+        proxy('officeScripts.selectTypeScriptVersion', 'typescript.selectTypeScriptVersion'),
+        proxy('officeScripts.openTsServerLog', 'typescript.openTsServerLog'),
+        proxy('officeScripts.goToProjectConfig', 'typescript.goToProjectConfig'),
+        proxy('officeScripts.goToSourceDefinition', 'typescript.goToSourceDefinition')
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('officeScripts.inlineImports', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('Open an .osts file first.');
+                return;
+            }
+            await inlineImports(editor.document);
+        }),
+        vscode.commands.registerCommand('officeScripts.splitFlows', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('Open an .osts file first.');
+                return;
+            }
+            await splitFlows(editor.document);
+        }),
     );
 
     console.log('Office Scripts Support is now active.');
