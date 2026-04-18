@@ -2,8 +2,8 @@
 
 Professional language support for [Office Scripts](https://learn.microsoft.com/office/dev/scripts/) — the TypeScript-based automation runtime for Excel on the web. Write, lint, and get full IntelliSense for `.osts` files in VS Code without having to cut-and-paste into the Excel Online code editor.
 
-- **Version:** 1.1.1
-- **Author:** Edward TL
+- **Version:** 1.2.0
+- **Author:** Edward-TL
 - **License:** MIT
 
 ## What it does
@@ -45,7 +45,7 @@ cd office-scripts
 npm install
 npm run package
 vsce package
-code --install-extension office-scripts-1.1.1.vsix
+code --install-extension office-scripts-*.vsix
 ```
 
 Fully quit and relaunch VS Code after install so the TypeScript server restarts with the plugin loaded.
@@ -109,13 +109,14 @@ Before pasting into the Excel Online editor, inline the helper's body into the `
 
 | Prefix       | Expands to                                                                |
 | ------------ | ------------------------------------------------------------------------- |
-| `osmain`     | Full `main(workbook: ExcelScript.Workbook)` function skeleton              |
+| `osmain`     | Full `main(workbook: ExcelScript.Workbook)` function skeleton             |
 | `ossheet`    | `const sheet = workbook.getActiveWorksheet();`                            |
 | `ostable`    | `workbook.getTable(...)` with null-guard                                  |
 | `osforrows`  | `for` loop over `table.getRange().getValues()`                            |
 | `osrange`    | Range + `setValue` + font/format chain                                    |
 | `osaddrow`   | `table.addRow(undefined, [...])`                                          |
 | `osrangeidx` | `sheet.getRangeByIndexes(row, col, height, width)`                        |
+| `osflowsplit`| `/** @FlowSplit */` marker for the Split Flows command                    |
 
 All prefixes start with `os` so they don't clutter autocomplete in unrelated TypeScript projects.
 
@@ -197,13 +198,21 @@ npm run compile
 
 ## Release notes
 
-### 1.1.1
+### 1.2.0
 
-- New Office-orange file icon, TypeScript-logo-style silhouette.
 - Multi-script projects: each `.osts` file is treated as an isolated module so multiple `main` functions and other top-level declarations coexist in one folder.
 - In-Excel-editor-matching diagnostics: strict-null-check and implicit-any-on-index errors are suppressed for `.osts` files to mirror the Microsoft online editor.
 - TypeScript commands (Restart TS Server, Reload Projects, Select Version, Open TS Server Log, Go to Project Configuration, Go to Source Definition) now surface in the Command Palette when an `.osts` file is focused, under the `Office Scripts` category.
+- New command: **Office Scripts: Inline Imports for Excel Upload** resolves relative imports (including chained `.osts`/`.ts` helpers) and inlines their bodies into a new editor ready to paste into Excel.
+- New command: **Office Scripts: Split Flows (@FlowSplit)** — functions annotated with `/** @FlowSplit */` are split into their own `.osts` files under a sibling folder. Each split file carries only the helpers it uses, with imports resolved and inlined automatically.
+- `osflowsplit` snippet expands to `/** @FlowSplit */`.
 - Type injection reworked to use a `getScriptFileNames` proxy on the `LanguageServiceHost`, avoiding the `addRoot` assertion failure on inferred projects.
+- Multi-strategy activation of the TypeScript feature extension so the plugin loads even on forks/Nightly builds.
+- Output channel "Office Scripts" surfaces plugin activation logs for troubleshooting.
+
+### 1.1.1
+
+- New Office-orange file icon, TypeScript-logo-style silhouette.
 
 ### 1.1.0
 
