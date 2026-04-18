@@ -5,6 +5,8 @@ import { subscribeToDocumentChanges } from './diagnostics';
 import { OfficeScriptCodeActionProvider } from './codeActions';
 import { OfficeScriptCompletionProvider } from './completionProvider';
 import { OfficeScriptHoverProvider } from './hoverProvider';
+import { inlineImports } from './inlineImports';
+import { splitFlows } from './flowSplit';
 
 /**
  * Activates the Office Scripts extension.
@@ -100,67 +102,40 @@ export async function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Diagnostic command — invokable from Cmd+Shift+P regardless of the
-    // active editor's language. Dumps plugin paths, whether each exists,
-    // what the installed extension layout looks like, and a few commands
-    // users may want to run manually (TS server commands are filtered out
-    // of the palette when the active editor is office-script).
+    // Proxy built-in TypeScript commands so they surface in the Command
+    // Palette for .osts files. The built-in commands are contributed with
+    // `when: editorLangId == typescript|javascript|...`, which excludes our
+    // `office-script` language id. We expose equivalents under an
+    // "Office Scripts" category, gated on `editorLangId == office-script`.
+    const proxy = (from: string, to: string) =>
+        vscode.commands.registerCommand(from, (...args: unknown[]) =>
+            vscode.commands.executeCommand(to, ...args)
+        );
     context.subscriptions.push(
-        vscode.commands.registerCommand('office-scripts.showDiagnostics', async () => {
-            const extRoot = context.extensionPath;
-            const probes = [
-                ['extension root', extRoot],
-                ['dist/plugin.js', path.join(extRoot, 'dist', 'plugin.js')],
-                ['types/excel-script.d.ts', path.join(extRoot, 'types', 'excel-script.d.ts')],
-                ['node_modules/office-scripts-plugin/package.json',
-                    path.join(extRoot, 'node_modules', 'office-scripts-plugin', 'package.json')],
-                ['node_modules/office-scripts-plugin/index.js',
-                    path.join(extRoot, 'node_modules', 'office-scripts-plugin', 'index.js')],
-            ];
+        proxy('officeScripts.restartTsServer', 'typescript.restartTsServer'),
+        proxy('officeScripts.reloadProjects', 'typescript.reloadProjects'),
+        proxy('officeScripts.selectTypeScriptVersion', 'typescript.selectTypeScriptVersion'),
+        proxy('officeScripts.openTsServerLog', 'typescript.openTsServerLog'),
+        proxy('officeScripts.goToProjectConfig', 'typescript.goToProjectConfig'),
+        proxy('officeScripts.goToSourceDefinition', 'typescript.goToSourceDefinition')
+    );
 
-            logChannel.appendLine('--- diagnostics ---');
-            for (const [label, p] of probes) {
-                const exists = fs.existsSync(p);
-                logChannel.appendLine(`  ${exists ? 'OK ' : 'MISS'} ${label}: ${p}`);
+    context.subscriptions.push(
+        vscode.commands.registerCommand('officeScripts.inlineImports', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('Open an .osts file first.');
+                return;
             }
-
-            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
-            logChannel.appendLine(
-                `  TS extension: id=${tsExt?.id ?? '(null)'} active=${tsExt?.isActive ?? false}`
-            );
-
-            const doc = vscode.window.activeTextEditor?.document;
-            logChannel.appendLine(
-                `  active doc: uri=${doc?.uri.toString() ?? '(none)'} languageId=${doc?.languageId ?? '(none)'}`
-            );
-
-            // List TypeScript-related commands that actually exist so the
-            // user has a fallback for palette-filtered ones.
-            const allCommands = await vscode.commands.getCommands(true);
-            const tsCommands = allCommands.filter(c => c.startsWith('typescript.')).sort();
-            logChannel.appendLine(`  typescript.* commands available: ${tsCommands.length}`);
-            for (const c of tsCommands.slice(0, 20)) {
-                logChannel.appendLine(`    ${c}`);
-            }
-
-            logChannel.show(true);
+            await inlineImports(editor.document);
         }),
-        vscode.commands.registerCommand('office-scripts.restartTsServer', async () => {
-            try {
-                await vscode.commands.executeCommand('typescript.restartTsServer');
-                logChannel.appendLine('[command] typescript.restartTsServer invoked');
-            } catch (err) {
-                logChannel.appendLine(`[command] restart failed: ${err}`);
+        vscode.commands.registerCommand('officeScripts.splitFlows', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('Open an .osts file first.');
+                return;
             }
-            logChannel.show(true);
-        }),
-        vscode.commands.registerCommand('office-scripts.openTsServerLog', async () => {
-            try {
-                await vscode.commands.executeCommand('typescript.openTsServerLog');
-            } catch (err) {
-                logChannel.appendLine(`[command] openTsServerLog failed: ${err}`);
-                logChannel.show(true);
-            }
+            await splitFlows(editor.document);
         }),
     );
 
