@@ -1,4 +1,11 @@
 {
+    "OfficeScript marker": {
+        "prefix": "osofficescript",
+        "body": [
+            "/** @OfficeScript */"
+        ],
+        "description": "Tag a .ts file's main function as an Office Script entry point."
+    },
     "FlowSplit marker": {
         "prefix": "osflowsplit",
         "body": [

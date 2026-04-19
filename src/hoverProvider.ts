@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isOfficeScriptFile } from './marker';
 
 /**
  * Adds a Microsoft Learn documentation link on hover when the user points
@@ -35,7 +36,7 @@ export class OfficeScriptHoverProvider implements vscode.HoverProvider {
         document: vscode.TextDocument,
         position: vscode.Position
     ): vscode.Hover | undefined {
-        if (!document.fileName.endsWith('.osts')) {
+        if (!isOfficeScriptFile(document.fileName, document.getText())) {
             return undefined;
         }
 

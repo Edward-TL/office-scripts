@@ -3,25 +3,29 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 /**
- * TypeScript Server Plugin that injects the ExcelScript ambient declarations
- * into TypeScript projects containing Office Scripts (.osts) files.
+ * TypeScript Server Plugin that applies Office Scripts treatment to:
+ *   1. All `.osts` files (language id `office-script`).
+ *   2. All `.ts` files containing a `/** @OfficeScript *\/` JSDoc tag.
  *
- * The plugin is GATED: we only inject types when the project actually has
- * .osts files. This matters because types/excel-script.d.ts declares ambient
- * globals (notably `main` and the `ExcelScript` namespace), which would
- * pollute every unrelated TypeScript project if injected unconditionally.
+ * Treatment per qualifying file:
+ *   - Snapshot is wrapped with a trailing `export {};` so each file becomes
+ *     its own module. This prevents TS2393 "Duplicate function implementation"
+ *     when multiple Office Scripts with `function main` live in one folder.
+ *   - `getSemanticDiagnostics` filters the codes Microsoft's in-Excel editor
+ *     demonstrably doesn't raise (possibly-null/undefined, implicit-any-index).
  *
- * Injection strategy: we proxy `getScriptFileNames` on the language service
- * host to append our ambient .d.ts to the file list. This is the documented
- * TS plugin pattern and works for both configured projects and the inferred
- * project that tsserver creates for standalone .osts files. (The previous
- * approach of calling `project.addRoot(scriptInfo)` hits an internal
- * `Debug Failure. False expression.` assertion when the project is inferred.)
- *
- * Layout at runtime:
- *   <ext-root>/dist/plugin.js         (this file, after esbuild)
- *   <ext-root>/types/excel-script.d.ts (ambient declarations we inject)
+ * The plugin is project-gated: types/excel-script.d.ts and the snapshot
+ * proxies only activate for projects that contain at least one Office
+ * Scripts file. Regular TypeScript projects pay the cost of the plugin
+ * being loaded but see no behavioral change.
  */
+const WRAP_SUFFIX = '\nexport {};\n';
+const WRAPPED_HOSTS = new WeakSet<object>();
+
+interface PluginConfig {
+    strictDiagnostics?: boolean;
+}
+
 function init(mod: { typescript: typeof ts }) {
     const tsLib = mod.typescript;
 
@@ -29,52 +33,52 @@ function init(mod: { typescript: typeof ts }) {
         const log = (msg: string) =>
             info.project.projectService.logger.info(`[office-scripts] ${msg}`);
 
-        const declarationPath = path.resolve(__dirname, '..', 'types', 'excel-script.d.ts');
+        const state: { strictDiagnostics: boolean } = {
+            strictDiagnostics: Boolean((info.config as PluginConfig | undefined)?.strictDiagnostics),
+        };
+        LIVE_STATES.add(state);
+
         const host = info.languageServiceHost;
 
-        // Inject the ambient .d.ts by proxying getScriptFileNames on the
-        // LanguageServiceHost. This is the supported pattern for adding
-        // ambient declarations from a tsserver plugin — it avoids
-        // project.addRoot(), which asserts the ScriptInfo is client-opened
-        // on InferredProjects and throws "Debug Failure. False expression.".
+        // Guard against double-registration: if the same host ever makes it
+        // here twice (e.g. plugin gets loaded via multiple language ids or
+        // re-init), stack only one layer of proxies. Otherwise snapshots
+        // accumulate `export {};` suffixes and semantic diagnostics get
+        // filtered twice — both observable as duplicated behavior.
+        if (WRAPPED_HOSTS.has(host)) {
+            log(`Skipping duplicate init for ${info.project.getProjectName()}`);
+            return info.languageService;
+        }
+        WRAPPED_HOSTS.add(host);
+
+        const declarationPath = path.resolve(__dirname, '..', 'types', 'excel-script.d.ts');
+
+        // Inject the ambient .d.ts when the project contains any Office
+        // Script. The presence check is cached per project and invalidated
+        // when the project's file count changes.
         const originalGetScriptFileNames = host.getScriptFileNames.bind(host);
         host.getScriptFileNames = () => {
             const files = originalGetScriptFileNames();
-            if (!projectHasOsts(info.project)) return files;
+            if (!projectHasOfficeScripts(info.project, files)) return files;
             return files.includes(declarationPath) ? files : [...files, declarationPath];
         };
 
-        // Make each .osts file a module in tsserver's in-memory view by
-        // appending a trailing `export {};`. Office Scripts are authored as
-        // script-style files (top-level `function main`), so across multiple
-        // .osts files the `main` symbols collide as TS2393 "Duplicate
-        // function implementation". A client can ship many .osts files in
-        // one folder — we want them all to typecheck independently.
-        //
-        // The appended text is invisible to the user (file on disk is
-        // untouched) and appended AFTER the original content so line/column
-        // positions for diagnostics, go-to-def, etc. stay correct. The
-        // Office Scripts runtime reads the disk file, so runtime is
-        // unaffected.
+        // Module-wrap qualifying files so top-level `main` symbols don't
+        // collide across files in the same folder. Untagged .ts files are
+        // passed through untouched.
         const originalGetScriptSnapshot = host.getScriptSnapshot!.bind(host);
         host.getScriptSnapshot = (fileName: string) => {
             const snap = originalGetScriptSnapshot(fileName);
             if (!snap) return snap;
-            if (!fileName.toLowerCase().endsWith('.osts')) return snap;
+            if (!isOfficeScriptPath(fileName)) return snap;
             const text = snap.getText(0, snap.getLength());
-            return tsLib.ScriptSnapshot.fromString(text + '\nexport {};\n');
+            if (!isOfficeScriptContent(fileName, text)) return snap;
+            if (text.endsWith(WRAP_SUFFIX)) return snap;
+            return tsLib.ScriptSnapshot.fromString(text + WRAP_SUFFIX);
         };
 
-        // Teach tsserver how to resolve imports that land on an .osts file.
-        // Default module resolution only considers .ts/.tsx/.d.ts/.js/.jsx,
-        // so `import { foo } from './helper'` where helper.osts exists would
-        // otherwise report TS2307 "Cannot find module". We fall through to
-        // the host's default resolver first, then check for a sibling .osts
-        // when nothing else matched. The resolved file is classified as
-        // Extension.Ts because tsserver has no "Extension.Osts" enum — the
-        // classification is only used for diagnostics routing; the actual
-        // parse uses our getScriptSnapshot proxy, which already wraps .osts
-        // files as modules.
+        // Resolve relative imports that land on an `.osts` file, since
+        // default module resolution doesn't consider that extension.
         const originalResolveModuleNameLiterals = host.resolveModuleNameLiterals?.bind(host);
         host.resolveModuleNameLiterals = (
             moduleLiterals,
@@ -113,20 +117,18 @@ function init(mod: { typescript: typeof ts }) {
             });
         };
 
-        // Suppress "possibly null/undefined" diagnostics in .osts files to
-        // match Microsoft's in-Excel Office Scripts editor behavior, which
-        // doesn't surface these as errors. We keep the types accurate
-        // (getColumnByName still returns TableColumn | undefined) so users
-        // who want strict null handling still get correct inference, but
-        // the red squigglies are removed for the common case. Filtering
-        // only the diagnostic codes below — not disabling strictNullChecks
-        // wholesale — avoids changing type inference for helper .ts files
-        // in the same project.
+        // Suppress "possibly null/undefined" and index-any diagnostics to
+        // match Microsoft's in-Excel editor behavior. Applied only to
+        // qualifying files — untagged .ts files keep strict checking.
         const originalGetSemanticDiagnostics =
             info.languageService.getSemanticDiagnostics.bind(info.languageService);
         info.languageService.getSemanticDiagnostics = (fileName: string) => {
             const diags = originalGetSemanticDiagnostics(fileName);
-            if (!fileName.toLowerCase().endsWith('.osts')) return diags;
+            if (state.strictDiagnostics) return diags;
+            if (!isOfficeScriptPath(fileName)) return diags;
+            const snap = originalGetScriptSnapshot(fileName);
+            const text = snap ? snap.getText(0, snap.getLength()) : '';
+            if (!isOfficeScriptContent(fileName, text)) return diags;
             return diags.filter(d => !SUPPRESSED_CODES.has(d.code));
         };
 
@@ -134,27 +136,76 @@ function init(mod: { typescript: typeof ts }) {
         return info.languageService;
     }
 
-    return { create };
+    // Called when the editor pushes new plugin configuration via
+    // `typescript.tsserver.configurePlugin`. We route strictDiagnostics
+    // changes in without needing a TS Server restart.
+    function onConfigurationChanged(config: PluginConfig) {
+        // No per-instance state here — the project's `create` closure owns
+        // its own `state`. In practice there's one project closure alive;
+        // we reach it via the WeakMap below so config flips re-take effect.
+        for (const state of LIVE_STATES) {
+            state.strictDiagnostics = Boolean(config.strictDiagnostics);
+        }
+    }
+
+    return { create, onConfigurationChanged };
 }
 
-// TS codes for diagnostics Microsoft's Office Scripts editor doesn't
-// surface; we filter them for .osts files to match. Keep this list
-// narrow — only add codes that are both (a) common in Office Scripts
-// idioms and (b) confirmed not raised by the in-Excel editor.
+const LIVE_STATES = new Set<{ strictDiagnostics: boolean }>();
+
 const SUPPRESSED_CODES = new Set<number>([
-    2531, // Object is possibly 'null'.
-    2532, // Object is possibly 'undefined'.
-    2533, // Object is possibly 'null' or 'undefined'.
-    18047, // 'X' is possibly 'null'.
-    18048, // 'X' is possibly 'undefined'.
-    18049, // 'X' is possibly 'null' or 'undefined'.
-    7053, // Element implicitly has 'any' type because expression of type 'X' can't be used to index type 'Y'.
+    2531, 2532, 2533,
+    18047, 18048, 18049,
+    7053,
 ]);
 
-function projectHasOsts(project: ts.server.Project): boolean {
-    // Fast path: any already-known file with the .osts extension.
-    const files = project.getFileNames(/* excludeFilesFromExternalLibraries */ true);
-    return files.some(f => f.toLowerCase().endsWith('.osts'));
+const MARKER_RE = /\/\*\*[\s\S]*?@OfficeScript\b/;
+
+/** Cheap extension check. Says whether a file is *eligible* for Office
+ *  Scripts treatment; content still has to be verified for `.ts`. */
+function isOfficeScriptPath(fileName: string): boolean {
+    const lower = fileName.toLowerCase();
+    if (lower.endsWith('.osts')) return true;
+    return lower.endsWith('.ts') && !lower.endsWith('.d.ts');
+}
+
+/** Final verdict combining extension + content. `.osts` always qualifies;
+ *  `.ts` only if the text contains the `@OfficeScript` marker. */
+function isOfficeScriptContent(fileName: string, text: string): boolean {
+    if (fileName.toLowerCase().endsWith('.osts')) return true;
+    return MARKER_RE.test(text);
+}
+
+/**
+ * Keyed by file count: if files are added or removed, the cache is
+ * recomputed. For changes WITHIN existing files (adding/removing the
+ * marker), users can run "Restart TS Server" to refresh.
+ */
+const projectHasOSCache = new WeakMap<ts.server.Project, { fileCount: number; hit: boolean }>();
+
+function projectHasOfficeScripts(project: ts.server.Project, files: readonly string[]): boolean {
+    // Fast path: any `.osts` file is an instant yes. No file reads needed.
+    if (files.some(f => f.toLowerCase().endsWith('.osts'))) return true;
+
+    const cached = projectHasOSCache.get(project);
+    if (cached && cached.fileCount === files.length) return cached.hit;
+
+    let hit = false;
+    for (const f of files) {
+        const lower = f.toLowerCase();
+        if (!lower.endsWith('.ts') || lower.endsWith('.d.ts')) continue;
+        if (f.includes('node_modules')) continue;
+        try {
+            if (MARKER_RE.test(fs.readFileSync(f, 'utf8'))) {
+                hit = true;
+                break;
+            }
+        } catch {
+            // ignore unreadable file
+        }
+    }
+    projectHasOSCache.set(project, { fileCount: files.length, hit });
+    return hit;
 }
 
 function resolveOstsPath(fromDir: string, specifier: string): string | undefined {

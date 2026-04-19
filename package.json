@@ -2,7 +2,7 @@
   "name": "office-scripts",
   "displayName": "Office Scripts Support",
   "description": "Professional language support for Office Scripts (.osts files)",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "edward-tl",
   "author": "Edward-TL",
   "license": "MIT",
@@ -66,6 +66,10 @@
       {
         "language": "office-script",
         "path": "./snippets/office-scripts.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/office-scripts.json"
       }
     ],
     "commands": [
@@ -108,43 +112,67 @@
         "command": "officeScripts.splitFlows",
         "title": "Split Flows (@FlowSplit)",
         "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.harvestCoreLibrary",
+        "title": "Harvest Core Library",
+        "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.exportToOsts",
+        "title": "Export to OSTS (JSON for upload)",
+        "category": "Office Scripts"
       }
     ],
     "menus": {
       "commandPalette": [
         {
           "command": "officeScripts.restartTsServer",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.reloadProjects",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.selectTypeScriptVersion",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.openTsServerLog",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.goToProjectConfig",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.goToSourceDefinition",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.inlineImports",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
         },
         {
           "command": "officeScripts.splitFlows",
-          "when": "editorLangId == office-script"
+          "when": "editorLangId == office-script || editorLangId == typescript"
+        },
+        {
+          "command": "officeScripts.exportToOsts",
+          "when": "editorLangId == typescript"
         }
       ]
+    },
+    "configuration": {
+      "title": "Office Scripts",
+      "properties": {
+        "officeScripts.strictDiagnostics": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, Office Scripts files keep TypeScript's strict null / index diagnostics (2531, 2532, 2533, 18047, 18048, 18049, 7053). By default these are suppressed to match Microsoft's in-Excel editor behavior. Enable for stricter local authoring; reload or restart TS Server after changing."
+        }
+      }
     }
   },
   "scripts": {

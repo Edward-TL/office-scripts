@@ -1,21 +1,23 @@
 # Office Scripts Support
 
-Professional language support for [Office Scripts](https://learn.microsoft.com/office/dev/scripts/) — the TypeScript-based automation runtime for Excel on the web. Write, lint, and get full IntelliSense for `.osts` files in VS Code without having to cut-and-paste into the Excel Online code editor.
+Professional language support for [Office Scripts](https://learn.microsoft.com/office/dev/scripts/) — the TypeScript-based automation runtime for Excel on the web. Write, lint, and get full IntelliSense in VS Code for scripts living either in `.osts` files or in plain `.ts` files tagged with `/** @OfficeScript */`.
 
-- **Version:** 1.2.0
+- **Version:** 1.3.0
 - **Author:** Edward-TL
 - **License:** MIT
 
 ## What it does
 
-This extension treats `.osts` files as first-class citizens in VS Code:
+This extension treats Office Scripts as first-class citizens in VS Code:
 
+- **Works on both `.osts` and `.ts` files.** You write standard TypeScript in either extension — the file type is a packaging decision, not a language one. See [.osts vs .ts](#osts-vs-ts--which-should-i-use) below.
+- **`/** @OfficeScript *\/` marker** — tag the `main` function in any `.ts` file with this JSDoc hint and the extension gives it the full Office Scripts treatment (type injection, module isolation, Excel-matching diagnostics). `.osts` files are recognized automatically with no tag required.
 - **ExcelScript type resolution** — `workbook.`, `sheet.getRange()`, `table.addRow()`, and the rest of the `ExcelScript` namespace autocomplete and type-check as if you were writing them inside the Excel editor. Types are injected automatically by a TypeScript Server Plugin; no `import` or `/// <reference>` lines needed.
-- **Multi-script projects.** Each `.osts` file is treated as an isolated module in tsserver's in-memory view, so you can keep dozens of scripts for one client in the same folder without `main`-function collisions or other top-level-symbol conflicts. The file on disk is untouched — only the language service sees the module boundary.
-- **In-Excel-editor-matching diagnostics.** Errors that Microsoft's in-Excel Office Scripts editor doesn't surface are suppressed in `.osts` files to match that experience:
+- **Multi-script projects.** Each qualifying file is treated as an isolated module in tsserver's in-memory view, so you can keep dozens of scripts for one client in the same folder without `main`-function collisions or other top-level-symbol conflicts. The file on disk is untouched — only the language service sees the module boundary.
+- **In-Excel-editor-matching diagnostics.** Errors that Microsoft's in-Excel Office Scripts editor doesn't surface are suppressed to match that experience:
   - "Object is possibly `null` / `undefined`" (TS2531/2532/2533/18047/18048/18049)
   - "Element implicitly has an `any` type because expression of type … can't be used to index type …" (TS7053)
-  Regular `.ts` files in the same project keep full strictness.
+  Regular (non-Office-Script) `.ts` files in the same project keep full strictness. Can be re-enabled per user via [`officeScripts.strictDiagnostics`](#strict-diagnostics-setting).
 - **Strict linting rules** specific to Office Scripts:
   - `any` type is forbidden — use `unknown` or a concrete type.
   - `console.warn` / `console.error` are flagged — only `console.log` is supported by the Office Scripts runtime.
@@ -26,7 +28,7 @@ This extension treats `.osts` files as first-class citizens in VS Code:
   - Hex colors inside `.setColor("…")` with human-readable names, including Excel's brand green.
   - Alignment enum values inside `.setHorizontalAlignment("…")`.
 - **Hover docs** — hovering any `ExcelScript.*` type shows a link to the Microsoft Learn reference page.
-- **TypeScript Command Palette access.** With an `.osts` file focused, `Cmd+Shift+P` surfaces the TypeScript commands that VS Code normally hides for non-`typescript` language ids:
+- **TypeScript Command Palette access.** With an Office Script focused, `Cmd+Shift+P` surfaces the TypeScript commands that VS Code normally hides for non-`typescript` language ids:
   - Office Scripts: Restart TS Server
   - Office Scripts: Reload Projects
   - Office Scripts: Select TypeScript Version
@@ -34,6 +36,8 @@ This extension treats `.osts` files as first-class citizens in VS Code:
   - Office Scripts: Go to Project Configuration
   - Office Scripts: Go to Source Definition
 - **Custom file icon** — `.osts` files get a distinct Office-orange icon in the explorer, independent of your active icon theme.
+- **Harvest Core Library** — point the command at a folder of downloaded scripts and it builds a reusable helper library. See [Harvest Core Library](#harvest-core-library) below.
+- **Export to OSTS (JSON for upload)** — takes a `.ts` file tagged with `/** @OfficeScript */`, inlines its imports, and writes a sibling `.osts` JSON envelope ready to drop into OneDrive → Scripts for upload.
 
 ## Installation
 
@@ -57,7 +61,48 @@ Fully quit and relaunch VS Code after install so the TypeScript server restarts 
 
 ## Usage
 
-Any file with the `.osts` extension is treated as an Office Script. The `ExcelScript` namespace is available globally — no setup per-project required.
+Office Scripts in this extension are any file the extension recognizes as one: **every `.osts` file**, plus **any `.ts` file tagged with `/** @OfficeScript *\/`**. Both are plain TypeScript under the hood — the `ExcelScript` namespace is available globally, no setup per-project required.
+
+### `.osts` vs `.ts` — which should I use?
+
+Both file types accept the same TypeScript code. Pick by workflow:
+
+| Scenario                                              | Use             |
+| ----------------------------------------------------- | --------------- |
+| File downloaded from OneDrive → Scripts (Power Automate format, JSON envelope) | `.osts` |
+| Ready-to-upload artifact produced by **Export to OSTS** | `.osts`       |
+| Day-to-day authoring, especially multi-file projects with shared helpers | `.ts` with `/** @OfficeScript */` |
+| Files that need to live alongside a normal TypeScript codebase | `.ts` with `/** @OfficeScript */` |
+
+The practical difference: `.osts` is the "on-disk upload format" — it carries the JSON envelope Excel Online / Power Automate expects. `.ts` is the "authoring format" — easier to diff, easier to grep, integrates cleanly with git and with tsserver. The extension recognizes both, and commands like **Inline Imports**, **Split Flows**, and **Export to OSTS** bridge between them.
+
+### The `/** @OfficeScript */` marker
+
+A JSDoc tag placed on the line immediately above the `main` function of any `.ts` file. It's an authoring-time hint that tells this extension "treat me like an Office Script" — so the file gets ambient `ExcelScript` types, module isolation, and the same relaxed diagnostics `.osts` files get. The marker is stripped automatically by **Export to OSTS**, so it never ships inside the uploaded script.
+
+```typescript
+/**
+ * Rebuilds the month-end plaza summary tables from the raw sales data.
+ */
+/** @OfficeScript */
+function main(workbook: ExcelScript.Workbook): void {
+    // ...
+}
+```
+
+Any existing JSDoc describing `main` can stay above the marker; the extension only cares that the tag exists somewhere as a `/** @OfficeScript */` block in the file. Snippet `osofficescript` expands to the marker.
+
+Without the marker, a plain `.ts` file is treated by tsserver as ordinary TypeScript — strict null checks, no `ExcelScript` namespace, no module isolation. That's intentional: it keeps the extension invisible in regular TypeScript codebases.
+
+### Strict diagnostics setting
+
+By default the extension suppresses the strict-null / possibly-undefined / index-any codes that Microsoft's in-Excel editor doesn't surface, to match that runtime's behavior. If you want VS Code to be *more* rigorous than the Excel editor (catching every `Object is possibly 'undefined'` in your authoring view), opt back in via VS Code settings:
+
+```json
+"officeScripts.strictDiagnostics": true
+```
+
+Takes effect live — no TS Server restart needed. The suppressed codes that get re-enabled: `2531`, `2532`, `2533`, `18047`, `18048`, `18049`, `7053`.
 
 ### Type resolution
 
@@ -91,11 +136,12 @@ export function getColumnIndex(table: ExcelScript.Table, name: string): number {
 }
 ```
 
-`sales-report.osts` (authoring view):
+`sales-report.ts` (authoring view — note the `/** @OfficeScript */` tag so the extension treats this `.ts` file as a script):
 
 ```typescript
 import { getColumnIndex } from './shared/tableUtils';
 
+/** @OfficeScript */
 function main(workbook: ExcelScript.Workbook) {
     const sales = workbook.getTable('Sales')!;
     const plazaIdx = getColumnIndex(sales, 'PLAZA');
@@ -103,7 +149,7 @@ function main(workbook: ExcelScript.Workbook) {
 }
 ```
 
-Before pasting into the Excel Online editor, inline the helper's body into the `.osts` and remove the `import` line.
+When ready to deploy: run **Office Scripts: Export to OSTS (JSON for upload)** to produce `sales-report.osts` with imports inlined and the JSON envelope already wrapped around the body. Or, for a quick preview, run **Office Scripts: Inline Imports for Excel Upload** to get an in-memory buffer you can paste into the Excel editor directly.
 
 ### Snippets
 
@@ -117,6 +163,7 @@ Before pasting into the Excel Online editor, inline the helper's body into the `
 | `osaddrow`   | `table.addRow(undefined, [...])`                                          |
 | `osrangeidx` | `sheet.getRangeByIndexes(row, col, height, width)`                        |
 | `osflowsplit`| `/** @FlowSplit */` marker for the Split Flows command                    |
+| `osofficescript` | `/** @OfficeScript */` marker that tags a `.ts` file's `main` function |
 
 All prefixes start with `os` so they don't clutter autocomplete in unrelated TypeScript projects.
 
@@ -129,6 +176,54 @@ Place the cursor on a diagnostic and press `Cmd+.` (macOS) or `Ctrl+.` (Windows/
 | `"any" type is forbidden`             | Replace with `unknown`             |
 | `console.warn is not supported`       | Replace with `console.log`         |
 | `console.error is not supported`      | Replace with `console.log`         |
+
+## Harvest Core Library
+
+A command for consolidating scattered Office Scripts into a reusable helper library. Useful when you have a folder full of scripts downloaded from OneDrive (typically via a Power Automate flow targeting `~/Documents/Scripts`) and want to extract the helper functions that keep getting copy-pasted across them.
+
+### Running it
+
+Command palette → **Office Scripts: Harvest Core Library**. You'll be asked for two folders:
+
+1. **Source folder** — where your downloaded `.osts` files live. They can be either raw TypeScript or the JSON envelope format Power Automate produces; both are handled.
+2. **Destination folder** — where the harvested library gets written.
+
+### Output layout
+
+```
+<destination>/
+├── script-osts-version/          Plain .ts copies of every source script,
+│   ├── sales-report.ts           JSON envelopes stripped, `/** @OfficeScript */`
+│   ├── inventory-update.ts       injected above each `main`.
+│   └── ...
+├── core/
+│   ├── getColumnIndex.ts         One file per helper function that is either
+│   ├── normalizeStoreName.ts     unique across the harvest, OR whose duplicates
+│   └── ...                       had byte-identical bodies (whitespace-normalized).
+├── conflict/
+│   ├── formatHeader/
+│   │   ├── sales-report.ts       Same-name functions whose bodies DIFFER —
+│   │   └── inventory-update.ts   one file per distinct variant, named after
+│   └── ...                       the source script, so you can diff & reconcile.
+├── interface/
+│   ├── core/
+│   │   └── ReportRow.ts          Same rules, applied to `interface` declarations.
+│   └── conflict/
+│       └── StoreRow/
+│           ├── sales-report.ts
+│           └── inventory-update.ts
+```
+
+### The two folders explained
+
+- **`core/`** — your working library. Each file is a standalone `export function` (or `export interface`) you can import from future scripts with a normal `import { getColumnIndex } from '../core/getColumnIndex'` and have the extension inline it automatically via **Inline Imports for Excel Upload** before you paste the script into Excel.
+- **`conflict/`** — anything that needs human judgment. If three scripts all defined `formatHeader` but one used a different date format, they land here side-by-side so you can decide which variant becomes the canonical one to promote into `core/`.
+- **`interface/`** — same split applied to TypeScript `interface` declarations, because shapes drift too (`StoreRow` with a `store` field here, with `storeName` there, etc.).
+- **`script-osts-version/`** — a throwaway intermediate: plain-TS copies of your source scripts with the JSON envelope unwrapped and `/** @OfficeScript */` injected above each `main`. Useful as a grep-friendly backup of what the harvest saw.
+
+### What qualifies as a helper
+
+Top-level function declarations and `interface` declarations — not methods, not nested helpers, not arrow-function consts. The `main` function is excluded by definition.
 
 ## Architecture
 
@@ -197,6 +292,14 @@ npm run compile
 - **Excel upload is manual.** Excel Online's runtime is single-file and doesn't support `import`. Helpers authored in shared `.ts` files must be inlined into the `.osts` before pasting into the in-Excel editor.
 
 ## Release notes
+
+### 1.3.0
+
+- **Extension now also works on `.ts` files**, not only `.osts`. Tag the `main` function of a `.ts` file with `/** @OfficeScript */` and it gets the full Office Scripts treatment (ambient `ExcelScript` types, module isolation, Excel-matching diagnostics). `.osts` continues to work with no tag required. New snippet `osofficescript` expands to the marker.
+- New command: **Office Scripts: Export to OSTS (JSON for upload)** — takes a `.ts` file tagged with `/** @OfficeScript */`, inlines its relative imports, strips the marker, wraps the body in the Power Automate / OneDrive → Scripts JSON envelope, and writes `<name>.osts` next to the source. One click from authoring to an artifact you can drop straight into OneDrive.
+- New command: **Office Scripts: Harvest Core Library** — point it at a folder of downloaded scripts and it extracts every non-`main` function and top-level `interface` into `core/` (unique or byte-identical duplicates) and `conflict/` (same name, different body), with a separate `interface/` tree for shape declarations. JSON envelopes are unwrapped on the fly into `script-osts-version/*.ts`, each tagged with `/** @OfficeScript */` above `main`. See [Harvest Core Library](#harvest-core-library).
+- New setting: `officeScripts.strictDiagnostics` (default `false`). Set to `true` to re-enable TypeScript's strict-null / possibly-undefined / implicit-any-index codes on Office Scripts — useful if you want VS Code to flag issues the in-Excel editor lets through. Changes apply live; no TS Server restart needed.
+- All commands that previously required an `.osts` file (Inline Imports, Split Flows) now also accept a `.ts` file tagged with `/** @OfficeScript */`. Split Flows output matches the source extension so a `.ts`-based flow produces `.ts` splits (each carrying the marker).
 
 ### 1.2.0
 

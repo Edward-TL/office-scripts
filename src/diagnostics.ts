@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
 import * as ts from 'typescript';
+import { isOfficeScriptFile } from './marker';
 
 /**
- * Analyzes the TypeScript AST of an .osts file to enforce strict rules.
- * Rules: No 'any' type, no 'console.warn', no 'console.error'.
+ * Analyzes the TypeScript AST of an Office Script file to enforce strict
+ * rules: No 'any' type, no 'console.warn', no 'console.error'.
+ *
+ * Applies to `.osts` files and to `.ts` files tagged with
+ * `/** @OfficeScript *\/`. Untagged `.ts` files are ignored.
  */
 export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.DiagnosticCollection): void {
     const diagnostics: vscode.Diagnostic[] = [];
 
-    // Only analyze files with .osts extension
-    if (!doc.fileName.endsWith('.osts')) {
+    if (!isOfficeScriptFile(doc.fileName, doc.getText())) {
+        collection.delete(doc.uri);
         return;
     }
 

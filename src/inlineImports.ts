@@ -2,12 +2,15 @@ import * as vscode from 'vscode';
 import * as ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import { isOfficeScriptFile } from './marker';
 
 /**
- * Produces an Excel-ready version of an .osts file with all relative imports
- * replaced by inlined copies of the referenced declarations. The result is
- * opened in a new untitled editor so the user can review and paste into the
- * Office Scripts editor in Excel Online.
+ * Produces an Excel-ready version of an Office Script with all relative
+ * imports replaced by inlined copies of the referenced declarations. The
+ * result is opened in a new untitled editor so the user can review and
+ * paste into the Office Scripts editor in Excel Online.
+ *
+ * Accepts `.osts` files and `.ts` files tagged with `/** @OfficeScript *\/`.
  *
  * Supported today:
  *   - Named imports from relative paths (`import { foo } from './helpers'`)
@@ -21,34 +24,49 @@ import * as path from 'path';
  *   - Non-relative imports (node_modules, bare specifiers)
  */
 export async function inlineImports(doc: vscode.TextDocument): Promise<void> {
-    if (doc.languageId !== 'office-script') {
-        vscode.window.showErrorMessage('Inline Imports only works on .osts files.');
+    const source = doc.getText();
+    if (!isOfficeScriptFile(doc.fileName, source)) {
+        vscode.window.showErrorMessage(
+            'Inline Imports requires an .osts file or a .ts file tagged with /** @OfficeScript */.',
+        );
         return;
     }
 
-    const source = doc.getText();
-    const collected = new Map<string, string>();
-    const visited = new Set<string>();
-    const warnings: string[] = [];
-
-    const topImports = collectImports(doc.fileName, source, warnings);
-    const docDir = path.dirname(doc.fileName);
-
-    for (const imp of topImports) {
-        await resolveAndCollect(docDir, imp.specifier, imp.names, collected, visited, warnings);
-    }
-
-    const output = stripImportsAndAppend(source, topImports, collected);
+    const { output, warnings } = await inlineImportsToText(doc.fileName, source);
 
     const newDoc = await vscode.workspace.openTextDocument({
         content: output,
-        language: 'office-script',
+        language: doc.languageId,
     });
     await vscode.window.showTextDocument(newDoc);
 
     if (warnings.length > 0) {
         vscode.window.showWarningMessage(`Inline Imports: ${warnings.join('; ')}`);
     }
+}
+
+/**
+ * Reusable core of the Inline Imports command: returns the fully-inlined
+ * source text plus any warnings, without touching the editor. Shared with
+ * the "Export to OSTS" command.
+ */
+export async function inlineImportsToText(
+    fileName: string,
+    source: string,
+): Promise<{ output: string; warnings: string[] }> {
+    const collected = new Map<string, string>();
+    const visited = new Set<string>();
+    const warnings: string[] = [];
+
+    const topImports = collectImports(fileName, source, warnings);
+    const fromDir = path.dirname(fileName);
+
+    for (const imp of topImports) {
+        await resolveAndCollect(fromDir, imp.specifier, imp.names, collected, visited, warnings);
+    }
+
+    const output = stripImportsAndAppend(source, topImports, collected);
+    return { output, warnings };
 }
 
 interface ImportInfo {

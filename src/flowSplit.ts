@@ -3,6 +3,7 @@ import * as ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { resolveImportsToDeclarations } from './inlineImports';
+import { isOfficeScriptFile } from './marker';
 
 /**
  * Splits every function annotated with a `/** @FlowSplit *\/` JSDoc tag in
@@ -26,12 +27,14 @@ import { resolveImportsToDeclarations } from './inlineImports';
  *     declarations are considered as helpers; nested declarations are not.
  */
 export async function splitFlows(doc: vscode.TextDocument): Promise<void> {
-    if (doc.languageId !== 'office-script') {
-        vscode.window.showErrorMessage('Split Flows only works on .osts files.');
+    const source = doc.getText();
+    if (!isOfficeScriptFile(doc.fileName, source)) {
+        vscode.window.showErrorMessage(
+            'Split Flows requires an .osts file or a .ts file tagged with /** @OfficeScript */.',
+        );
         return;
     }
 
-    const source = doc.getText();
     const sf = ts.createSourceFile(doc.fileName, source, ts.ScriptTarget.ES2020, true);
 
     const flows = collectFlowFunctions(sf);
@@ -43,8 +46,9 @@ export async function splitFlows(doc: vscode.TextDocument): Promise<void> {
     const topDecls = collectTopDeclarations(sf, flows);
     const importsByName = collectImportsByName(sf);
 
+    const sourceExt = path.extname(doc.fileName);
     const sourceDir = path.dirname(doc.fileName);
-    const sourceBase = path.basename(doc.fileName, '.osts');
+    const sourceBase = path.basename(doc.fileName, sourceExt);
     const outDir = path.join(sourceDir, sourceBase);
     fs.mkdirSync(outDir, { recursive: true });
 
@@ -66,8 +70,12 @@ export async function splitFlows(doc: vscode.TextDocument): Promise<void> {
             warnings,
         );
         const content = buildSplitFile(flow, helperNames, topDecls, importedDecls, source);
-        const outPath = path.join(outDir, `${flow.name}.osts`);
-        fs.writeFileSync(outPath, content);
+        // Split output matches the source extension so a `.ts` authoring
+        // file produces `.ts` splits (still carrying the `@OfficeScript`
+        // marker so the extension keeps treating them specially).
+        const markedContent = sourceExt === '.ts' ? `/** @OfficeScript */\n${content}` : content;
+        const outPath = path.join(outDir, `${flow.name}${sourceExt}`);
+        fs.writeFileSync(outPath, markedContent);
         written.push(path.basename(outPath));
     }
 

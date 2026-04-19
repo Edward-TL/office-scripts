@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isOfficeScriptFile } from './marker';
 
 /**
  * Context-aware completions for Office Scripts.
@@ -16,7 +17,7 @@ export class OfficeScriptCompletionProvider implements vscode.CompletionItemProv
         document: vscode.TextDocument,
         position: vscode.Position
     ): vscode.CompletionItem[] {
-        if (!document.fileName.endsWith('.osts')) {
+        if (!isOfficeScriptFile(document.fileName, document.getText())) {
             return [];
         }
 

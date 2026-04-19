@@ -7,6 +7,8 @@ import { OfficeScriptCompletionProvider } from './completionProvider';
 import { OfficeScriptHoverProvider } from './hoverProvider';
 import { inlineImports } from './inlineImports';
 import { splitFlows } from './flowSplit';
+import { harvestCoreLibrary } from './harvestCoreLibrary';
+import { exportToOsts } from './exportToOsts';
 
 /**
  * Activates the Office Scripts extension.
@@ -28,7 +30,10 @@ import { splitFlows } from './flowSplit';
  *   - Hover with docs links        (src/hoverProvider.ts)
  */
 export async function activate(context: vscode.ExtensionContext) {
-    const selector: vscode.DocumentSelector = { language: 'office-script' };
+    const selector: vscode.DocumentSelector = [
+        { language: 'office-script' },
+        { language: 'typescript' },
+    ];
 
     // Force a TypeScript feature extension to activate so tsserver runs with
     // our plugin loaded for office-script files. We try three strategies in
@@ -136,6 +141,40 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
             await splitFlows(editor.document);
+        }),
+        vscode.commands.registerCommand('officeScripts.harvestCoreLibrary', async () => {
+            await harvestCoreLibrary();
+        }),
+        vscode.commands.registerCommand('officeScripts.exportToOsts', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                vscode.window.showErrorMessage('Open a .ts Office Script first.');
+                return;
+            }
+            await exportToOsts(editor.document);
+        }),
+    );
+
+    // Push the `officeScripts.strictDiagnostics` setting to our TS Server
+    // plugin. VS Code forwards this via tsserver's `configurePlugin`
+    // request so the plugin receives it in `onConfigurationChanged`.
+    const pushPluginConfig = async () => {
+        const cfg = vscode.workspace.getConfiguration('officeScripts');
+        try {
+            await vscode.commands.executeCommand('typescript.tsserverRequest', 'configurePlugin', {
+                pluginName: 'office-scripts-plugin',
+                configuration: { strictDiagnostics: cfg.get<boolean>('strictDiagnostics', false) },
+            });
+        } catch (err) {
+            logChannel.appendLine(`[config] failed to push plugin config: ${err}`);
+        }
+    };
+    await pushPluginConfig();
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('officeScripts.strictDiagnostics')) {
+                void pushPluginConfig();
+            }
         }),
     );
 

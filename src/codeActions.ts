@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { isOfficeScriptFile } from './marker';
 
 /**
  * Provides quick-fixes (lightbulb actions) for diagnostics emitted by
@@ -15,9 +16,7 @@ export class OfficeScriptCodeActionProvider implements vscode.CodeActionProvider
         _range: vscode.Range | vscode.Selection,
         context: vscode.CodeActionContext
     ): vscode.CodeAction[] {
-        // Scope strictly to .osts files — belt and suspenders; the document
-        // selector registered in extension.ts already restricts activation.
-        if (!document.fileName.endsWith('.osts')) {
+        if (!isOfficeScriptFile(document.fileName, document.getText())) {
             return [];
         }
 
