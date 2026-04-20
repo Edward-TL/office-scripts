@@ -2,7 +2,7 @@
 
 Professional language support for [Office Scripts](https://learn.microsoft.com/office/dev/scripts/) — the TypeScript-based automation runtime for Excel on the web. Write, lint, and get full IntelliSense in VS Code for scripts living either in `.osts` files or in plain `.ts` files tagged with `/** @OfficeScript */`.
 
-- **Version:** 1.3.0
+- **Version:** 1.4.0
 - **Author:** Edward-TL
 - **License:** MIT
 
@@ -38,6 +38,7 @@ This extension treats Office Scripts as first-class citizens in VS Code:
 - **Custom file icon** — `.osts` files get a distinct Office-orange icon in the explorer, independent of your active icon theme.
 - **Harvest Core Library** — point the command at a folder of downloaded scripts and it builds a reusable helper library. See [Harvest Core Library](#harvest-core-library) below.
 - **Export to OSTS (JSON for upload)** — takes a `.ts` file tagged with `/** @OfficeScript */`, inlines its imports, and writes a sibling `.osts` JSON envelope ready to drop into OneDrive → Scripts for upload.
+- **Export all TS to OSTS** — bulk version: right-click a folder and every tagged `.ts` under it is converted into a sibling `<folder>-osts/` directory. See [Export all TS to OSTS](#export-all-ts-to-osts).
 
 ## Installation
 
@@ -177,6 +178,53 @@ Place the cursor on a diagnostic and press `Cmd+.` (macOS) or `Ctrl+.` (Windows/
 | `console.warn is not supported`       | Replace with `console.log`         |
 | `console.error is not supported`      | Replace with `console.log`         |
 
+## Export all TS to OSTS
+
+Bulk counterpart to **Export to OSTS (JSON for upload)**. Instead of exporting one file at a time, point the command at a folder and it converts every `.ts` file tagged with `/** @OfficeScript */` that lives under it.
+
+### Running it
+
+Two ways:
+
+- **Explorer context menu.** Right-click any folder in the Explorer → **Export all TS to OSTS**.
+- **Command Palette.** `Cmd+Shift+P` → **Office Scripts: Export all TS to OSTS**, then pick a folder in the dialog.
+
+### Output layout
+
+Given a source folder `reports/`:
+
+```
+client-acme/
+├── reports.osts
+└── reports/                      ← selected folder
+    ├── emptyFunction.ts          ← /** @OfficeScript */ → converted
+    ├── first_step.ts             ← /** @OfficeScript */ → converted
+    └── syncRecords.ts            ← no marker → skipped
+```
+
+The result lands in a **sibling** folder named `<folder>-osts/` — in this case `reports-osts/`:
+
+```
+client-acme/
+├── reports.osts
+├── reports/
+│   └── ... (unchanged)
+└── reports-osts/
+    ├── emptyFunction.osts
+    └── first_step.osts
+```
+
+Nested subfolders inside the source are preserved in the output. Each `.osts` file is the same JSON envelope **Export to OSTS** would produce — imports already inlined, `/** @OfficeScript */` marker stripped, ready to upload to OneDrive → Scripts.
+
+### What gets skipped
+
+- `.ts` files without the `/** @OfficeScript */` tag (helper modules, plain TypeScript).
+- `.d.ts` files.
+- Anything under `node_modules/` or a dotfile folder.
+- Non-`.ts` files.
+
+Skipping is silent by design, so you can keep scripts and their plain-TS helpers in the same tree without filtering them by hand.
+
 ## Harvest Core Library
 
 A command for consolidating scattered Office Scripts into a reusable helper library. Useful when you have a folder full of scripts downloaded from OneDrive (typically via a Power Automate flow targeting `~/Documents/Scripts`) and want to extract the helper functions that keep getting copy-pasted across them.
@@ -292,6 +340,10 @@ npm run compile
 - **Excel upload is manual.** Excel Online's runtime is single-file and doesn't support `import`. Helpers authored in shared `.ts` files must be inlined into the `.osts` before pasting into the in-Excel editor.
 
 ## Release notes
+
+### 1.4.0
+
+- New command: **Office Scripts: Export all TS to OSTS** — right-click a folder in the Explorer (or run from the Command Palette) and every `.ts` file tagged with `/** @OfficeScript */` under it is converted to its `.osts` envelope equivalent. Output lands in a sibling `<folder>-osts/` directory, preserving any nested structure. Files without the tag are silently skipped, so you can mix scripts and plain helpers in the same tree.
 
 ### 1.3.0
 

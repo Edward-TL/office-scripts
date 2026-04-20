@@ -2,7 +2,7 @@
   "name": "office-scripts",
   "displayName": "Office Scripts Support",
   "description": "Professional language support for Office Scripts (.osts files)",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "edward-tl",
   "author": "Edward-TL",
   "license": "MIT",
@@ -122,9 +122,21 @@
         "command": "officeScripts.exportToOsts",
         "title": "Export to OSTS (JSON for upload)",
         "category": "Office Scripts"
+      },
+      {
+        "command": "officeScripts.exportAllToOsts",
+        "title": "Export all TS to OSTS",
+        "category": "Office Scripts"
       }
     ],
     "menus": {
+      "explorer/context": [
+        {
+          "command": "officeScripts.exportAllToOsts",
+          "when": "explorerResourceIsFolder",
+          "group": "officeScripts"
+        }
+      ],
       "commandPalette": [
         {
           "command": "officeScripts.restartTsServer",

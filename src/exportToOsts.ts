@@ -24,12 +24,9 @@ export async function exportToOsts(doc: vscode.TextDocument): Promise<void> {
         return;
     }
 
-    const { output, warnings } = await inlineImportsToText(doc.fileName, source);
-    const scriptBody = stripOfficeScriptMarker(output);
-    const envelope = buildEnvelope(scriptBody);
-
+    const { json, warnings } = await buildOstsJson(doc.fileName, source);
     const outPath = doc.fileName.replace(/\.ts$/i, '.osts');
-    fs.writeFileSync(outPath, JSON.stringify(envelope));
+    fs.writeFileSync(outPath, json);
 
     const relPath = vscode.workspace.asRelativePath(outPath);
     vscode.window.showInformationMessage(`Wrote ${relPath}. Ready to upload to OneDrive → Scripts.`);
@@ -37,6 +34,23 @@ export async function exportToOsts(doc: vscode.TextDocument): Promise<void> {
     if (warnings.length > 0) {
         vscode.window.showWarningMessage(`Export to OSTS: ${warnings.join('; ')}`);
     }
+}
+
+/**
+ * Reusable core of the single-file command. Given the source of a `.ts`
+ * Office Script, returns the serialized OSTS envelope (JSON text) that
+ * would be written to disk. Does not touch the filesystem. Used by the
+ * bulk **Export all TS to OSTS** command, which writes each envelope to
+ * a mirrored output folder.
+ */
+export async function buildOstsJson(
+    fileName: string,
+    source: string,
+): Promise<{ json: string; warnings: string[] }> {
+    const { output, warnings } = await inlineImportsToText(fileName, source);
+    const scriptBody = stripOfficeScriptMarker(output);
+    const envelope = buildEnvelope(scriptBody);
+    return { json: JSON.stringify(envelope), warnings };
 }
 
 /**

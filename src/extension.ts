@@ -9,6 +9,7 @@ import { inlineImports } from './inlineImports';
 import { splitFlows } from './flowSplit';
 import { harvestCoreLibrary } from './harvestCoreLibrary';
 import { exportToOsts } from './exportToOsts';
+import { exportAllToOsts } from './exportAllToOsts';
 
 /**
  * Activates the Office Scripts extension.
@@ -152,6 +153,9 @@ export async function activate(context: vscode.ExtensionContext) {
                 return;
             }
             await exportToOsts(editor.document);
+        }),
+        vscode.commands.registerCommand('officeScripts.exportAllToOsts', async (folderUri?: vscode.Uri) => {
+            await exportAllToOsts(folderUri);
         }),
     );
 
